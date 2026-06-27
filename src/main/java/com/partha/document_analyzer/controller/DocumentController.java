@@ -18,7 +18,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/document")
@@ -179,5 +182,32 @@ public class DocumentController {
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"" + fileName + "\"")
                 .body(resource);
+    }
+
+    @PostMapping("/{documentId}/analyze")
+    public ResponseEntity<DocumentDetailResponseDto> analyzeDocument(
+            @PathVariable Long documentId,
+            @RequestParam Long userId) throws IOException {
+
+        DocumentDetailResponseDto response = documentService.analyzeDocument(documentId, userId);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{documentId}/ask")
+    public ResponseEntity<SuccessResponseDto> askQuestion(
+            @PathVariable Long documentId,
+            @RequestParam Long userId,
+            @RequestParam String question
+    ) {
+        System.out.println(documentId + " "+ userId + " " + question);
+        String answer = documentService.answerQuestion(documentId, userId, question);
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("documentId", documentId);
+        data.put("question", question);
+        data.put("answer", answer);
+
+        return ResponseEntity.ok(new SuccessResponseDto("Question answered successfully", data));
+
     }
 }

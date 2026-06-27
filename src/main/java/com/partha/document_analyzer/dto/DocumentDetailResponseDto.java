@@ -25,6 +25,8 @@ public class DocumentDetailResponseDto {
 
     private Long userId;
     private String username;
+    private String aiSummary;
+    private LocalDateTime aiAnalyzedAt;
 
     public DocumentDetailResponseDto(Document document) {
         this.id = document.getId();
@@ -37,6 +39,8 @@ public class DocumentDetailResponseDto {
         this.isEncrypted = document.getIsEncrypted();
         this.createdAt = document.getCreatedAt();
         this.updatedAt = document.getUpdatedAt();
+        this.aiSummary = document.getAiSummary();
+        this.aiAnalyzedAt = document.getAiAnalyzedAt();
 
         if (document.getUser() != null) {
             this.userId = document.getUser().getId();

@@ -17,7 +17,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @AllArgsConstructor
@@ -27,6 +30,8 @@ public class DocumentService {
     private final UserRepository userRepository;
     private final DocumentRepository documentRepository;
     private final FileStorageService fileStorageService;
+    private final AiAnalysisService aiAnalysisService;
+    private final TikaExtractionService tikaExtractionService;
 
     public DocumentResponseDto createDocument(Long userID, CreateDocumentRequestDto request) {
 
@@ -160,11 +165,14 @@ public class DocumentService {
         long fileSize = fileStorageService.getFileSize(file);
         String fileType = fileStorageService.getContentType(file);
 
+        // extracting text from file
+        String extractedContent = tikaExtractionService.extractText(file);
+
         // Create document
         Document document = new Document();
         document.setTitle(request.getTitle());
         document.setDescription(request.getDescription());
-        document.setContent(request.getContent());
+        document.setContent(extractedContent);
         document.setFileName(originalFilename);      // Original name
         document.setFilePath(storedFilename);        // Unique name on server
         document.setFileSize(fileSize);
@@ -211,6 +219,31 @@ public class DocumentService {
                 .orElseThrow(() -> new DocumentNotFoundException(documentId));
 
         return document.getFileName();
+    }
+
+    public DocumentDetailResponseDto analyzeDocument(Long documentId, Long userId) {
+
+        Document document = documentRepository.findByIdAndUserIdAndIsDeletedFalse(documentId, userId)
+                .orElseThrow(() -> new DocumentNotFoundException(documentId));
+
+        String contentToAnalyze = document.getContent() != null
+                ? document.getContent()
+                : document.getDescription();
+        String aiResult = aiAnalysisService.summarizeDocument(document.getTitle(), contentToAnalyze);
+        document.setAiSummary(aiResult);
+        document.setAiAnalyzedAt(LocalDateTime.now());
+        documentRepository.save(document);
+
+        return new DocumentDetailResponseDto(document);
+    }
+
+    public String answerQuestion(Long documentId, Long userId, String question) {
+
+        Document document = documentRepository.findByIdAndUserIdAndIsDeletedFalse(documentId, userId)
+                .orElseThrow(() -> new DocumentNotFoundException(documentId));
+        String contentToUse = document.getContent() != null ? document.getContent() : document.getDescription();
+
+        return aiAnalysisService.answerQuestion(document.getTitle(), contentToUse, question);
     }
 
 }

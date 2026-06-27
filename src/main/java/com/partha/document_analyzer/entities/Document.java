@@ -62,6 +62,12 @@ public class Document {
         updatedAt = LocalDateTime.now();
     }
 
+    @Column(name = "ai_summary", columnDefinition = "Text")
+    private String aiSummary;
+
+    @Column(name = "ai_analyzed_at")
+    private LocalDateTime aiAnalyzedAt;
+
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
