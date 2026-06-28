@@ -1,15 +1,17 @@
 package com.partha.document_analyzer.services;
 
-import com.partha.document_analyzer.dto.RegisterRequestDto;
-import com.partha.document_analyzer.dto.UpdateUserRequestDto;
-import com.partha.document_analyzer.dto.UserResponseDto;
+import com.partha.document_analyzer.dto.*;
 import com.partha.document_analyzer.entities.User;
 import com.partha.document_analyzer.enums.Role;
 import com.partha.document_analyzer.exceptions.EmailAlreadyExistsException;
+import com.partha.document_analyzer.exceptions.InvalidRequestException;
 import com.partha.document_analyzer.exceptions.UserNotFoundException;
 import com.partha.document_analyzer.exceptions.UsernameAlreadyExistException;
 import com.partha.document_analyzer.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,10 +22,11 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-public class UserService {
+public class UserService implements UserDetailsService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder; // Inject BCrypt encoder
+    private final JwtService jwtService;
 
     @Transactional
     public UserResponseDto registerUser(RegisterRequestDto request) {
@@ -141,5 +144,36 @@ public class UserService {
 
     public boolean existsByEmail(String email) {
         return userRepository.existsByEmail(email.toLowerCase());
+    }
+
+    @Override
+    public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
+
+        User user = userRepository.findByEmail(email).orElseThrow(() -> new UserNotFoundException("User not found " + email));
+
+        return org.springframework.security.core.userdetails.User.builder()
+                .username(user.getEmail())
+                .password(user.getPassword())
+                .authorities("ROLE_" + user.getRole().name())
+                .build();
+    }
+
+    public UserLoginResponseDto loginUser(LoginRequestDto request) {
+
+        User user = userRepository.findByEmail(request.getEmail()).orElseThrow(() -> new UserNotFoundException("User not found"));
+
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw new InvalidRequestException("Invalid Password");
+        }
+
+        String token = jwtService.generateToken(user.getEmail(), user.getId(), user.getRole().name());
+
+        UserLoginResponseDto response = new UserLoginResponseDto();
+        response.setToken(token);
+        response.setType("Bearer");
+        response.setExpiresIn(86400000L);
+        response.setUser(new UserResponseDto(user));
+
+        return response;
     }
 }

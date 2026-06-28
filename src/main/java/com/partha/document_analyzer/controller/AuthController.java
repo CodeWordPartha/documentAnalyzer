@@ -1,9 +1,6 @@
 package com.partha.document_analyzer.controller;
 
-import com.partha.document_analyzer.dto.LoginRequestDto;
-import com.partha.document_analyzer.dto.RegisterRequestDto;
-import com.partha.document_analyzer.dto.SuccessResponseDto;
-import com.partha.document_analyzer.dto.UserResponseDto;
+import com.partha.document_analyzer.dto.*;
 import com.partha.document_analyzer.services.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -31,8 +28,8 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<SuccessResponseDto> login (@Valid @RequestBody LoginRequestDto request) {
-        return ResponseEntity.ok(new SuccessResponseDto("Login endpoint - Coming soon!"));
-
+    public ResponseEntity<SuccessResponseDto> login(@Valid @RequestBody LoginRequestDto request) {
+        UserLoginResponseDto response = userService.loginUser(request);
+        return ResponseEntity.ok(new SuccessResponseDto("Login successful", response));
     }
 }
