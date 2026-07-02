@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Document Analyzer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-light">
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-dark bg-primary">
+        <div class="container">
+            <span class="navbar-brand">Document Analyzer</span>
+            <div class="d-flex align-items-center gap-3">
+                <span class="text-white" id="welcomeText"></span>
+                <button onclick="logout()" class="btn btn-outline-light btn-sm">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+
+        <!-- Upload Section -->
+        <div class="card shadow mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Upload New Document</h5>
+                <div id="uploadError" class="alert alert-danger d-none"></div>
+                <div id="uploadSuccess" class="alert alert-success d-none"></div>
+
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <input type="text" id="docTitle" class="form-control" placeholder="Document title">
+                    </div>
+                    <div class="col-md-4">
+                        <input type="text" id="docDescription" class="form-control" placeholder="Description (optional)">
+                    </div>
+                    <div class="col-md-4">
+                        <input type="file" id="docFile" class="form-control" accept=".pdf,.txt,.docx">
+                    </div>
+                </div>
+                <button onclick="uploadDocument()" class="btn btn-primary mt-3" id="uploadBtn">
+                    Upload Document
+                </button>
+            </div>
+        </div>
+
+<!-- Search Section -->
+<div class="card shadow mb-4">
+    <div class="card-body">
+        <div class="d-flex gap-2 mb-3">
+            <button onclick="setSearchMode('title')" 
+                    class="btn btn-primary btn-sm" id="btnTitle">
+                Search by Title
+            </button>
+            <button onclick="setSearchMode('content')" 
+                    class="btn btn-outline-primary btn-sm" id="btnContent">
+                Search by Content Keywords
+            </button>
+        </div>
+
+        <div class="input-group">
+            <input type="text" id="searchInput" class="form-control"
+                placeholder="Search documents by title..."
+                onkeypress="if(event.key==='Enter') searchDocuments()">
+            <button onclick="searchDocuments()" class="btn btn-primary">Search</button>
+            <button onclick="clearSearch()" class="btn btn-outline-secondary">Clear</button>
+        </div>
+
+        <small id="searchHint" class="text-muted mt-1 d-block">
+            Searching in PostgreSQL DB by document title
+        </small>
+    </div>
+</div>
+
+<!-- Top Keywords Section -->
+<div class="card shadow mb-4" id="topKeywordsCard">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0">Top Keywords (from indexed documents)</h6>
+            <button onclick="loadTopKeywords()" class="btn btn-outline-primary btn-sm">Refresh</button>
+        </div>
+        <div id="topKeywordsContainer">
+            <small class="text-muted">Click refresh to load top keywords</small>
+        </div>
+    </div>
+</div>
+
+        <!-- Documents List -->
+        <div class="card shadow">
+            <div class="card-body">
+                <h5 class="card-title">My Documents</h5>
+                <div id="documentsContainer">
+                    <div class="text-center text-muted py-4">Loading documents...</div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+ <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="app.js"></script>
+    <script>
+        // Check if logged in
+        if (!getToken()) {
+            window.location.href = 'index.html';
+        }
+
+        // Show welcome message
+        document.getElementById('welcomeText').innerText = `Welcome, ${getUsername()}`;
+
+        // Load documents on page load
+        loadDocuments();
+        loadTopKeywords(); // add this
+    </script>
+</body>
+</html>

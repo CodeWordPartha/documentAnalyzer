@@ -4,6 +4,7 @@ import com.partha.document_analyzer.dto.CreateDocumentRequestDto;
 import com.partha.document_analyzer.dto.DocumentDetailResponseDto;
 import com.partha.document_analyzer.dto.DocumentResponseDto;
 import com.partha.document_analyzer.dto.UpdateDocumentRequestDto;
+import com.partha.document_analyzer.dto.ai.DocumentAnalysisResult;
 import com.partha.document_analyzer.entities.Document;
 import com.partha.document_analyzer.entities.User;
 import com.partha.document_analyzer.exceptions.DocumentNotFoundException;
@@ -32,6 +33,7 @@ public class DocumentService {
     private final FileStorageService fileStorageService;
     private final AiAnalysisService aiAnalysisService;
     private final TikaExtractionService tikaExtractionService;
+    private final SearchIndexService searchIndexService;
 
     public DocumentResponseDto createDocument(Long userID, CreateDocumentRequestDto request) {
 
@@ -45,9 +47,17 @@ public class DocumentService {
         document.setIsEncrypted(false);
         document.setIsDeleted(false);
 
-        documentRepository.save(document);
+        Document savedDocument = documentRepository.save(document);
 
-        return new DocumentResponseDto(document);
+        // Index document for in-memory search
+        searchIndexService.indexDocument(
+                savedDocument.getId(),
+                savedDocument.getTitle(),
+                savedDocument.getContent() != null ? savedDocument.getContent() : "",
+                System.currentTimeMillis()
+        );
+
+        return new DocumentResponseDto(savedDocument);
     }
 
     public DocumentDetailResponseDto getDocumentById(Long documentId,Long userId) {
@@ -181,8 +191,14 @@ public class DocumentService {
         document.setIsEncrypted(false);
         document.setIsDeleted(false);
 
-        // Save
         Document savedDocument = documentRepository.save(document);
+
+        searchIndexService.indexDocument(
+                savedDocument.getId(),
+                savedDocument.getTitle(),
+                savedDocument.getContent() != null ? savedDocument.getContent() : "",
+                System.currentTimeMillis()
+        );
 
         return new DocumentResponseDto(savedDocument);
     }
@@ -229,9 +245,16 @@ public class DocumentService {
         String contentToAnalyze = document.getContent() != null
                 ? document.getContent()
                 : document.getDescription();
-        String aiResult = aiAnalysisService.summarizeDocument(document.getTitle(), contentToAnalyze);
-        document.setAiSummary(aiResult);
+
+        DocumentAnalysisResult result = aiAnalysisService.summarizeDocument(
+                document.getTitle(), contentToAnalyze);
+
+        document.setAiSummary(result.summary());
+        document.setAiDocumentType(result.documentType());
+        document.setAiSentiment(result.sentiment());
+        document.setAiKeyTopics(result.keyTopics());
         document.setAiAnalyzedAt(LocalDateTime.now());
+
         documentRepository.save(document);
 
         return new DocumentDetailResponseDto(document);

@@ -3,9 +3,12 @@ package com.partha.document_analyzer.controller;
 import com.partha.document_analyzer.dto.*;
 import com.partha.document_analyzer.services.DocumentService;
 import com.partha.document_analyzer.services.FileStorageService;
+import com.partha.document_analyzer.services.RateLimiterService;
+import io.github.bucket4j.Bucket;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.autoconfigure.data.web.SpringDataWebProperties;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -26,11 +29,14 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/document")
 @RequiredArgsConstructor
+@Tag(name = "Document Management", description = "APIs for managing documents - create, read, update, delete and file upload")
 public class DocumentController {
 
     private final DocumentService documentService;
     private final FileStorageService fileStorageService;
+    private final RateLimiterService rateLimiterService;
 
+    @Operation(summary = "Create document", description = "Create a new document with text content")
     @PostMapping
     public ResponseEntity<SuccessResponseDto> createDocument(@RequestParam Long userId, @Valid @RequestBody CreateDocumentRequestDto request) {
 
@@ -41,6 +47,8 @@ public class DocumentController {
         return new ResponseEntity<>(successResponseDto, HttpStatus.CREATED);
     }
 
+
+    @Operation(summary = "Get document", description = "Returns a document of the user")
     @GetMapping("/{id}")
     public ResponseEntity<DocumentDetailResponseDto> getById(@PathVariable Long id, @RequestParam Long userId) {
 
@@ -49,12 +57,14 @@ public class DocumentController {
         return ResponseEntity.ok(document);
     }
 
+    @Operation(summary = "Get all document", description = "Returns all document of user")
     @GetMapping("/user/{userId}")
     public ResponseEntity<List<DocumentResponseDto>> getUserDocuments(@PathVariable Long userId) {
         List<DocumentResponseDto> documents = documentService.getUserDocument(userId);
         return ResponseEntity.ok(documents);
     }
 
+    @Operation(summary = "Get all document with pagination", description = "Returns all document of user with paginated")
     @GetMapping("/user/{userId}/paginated")
     public ResponseEntity<Page<DocumentResponseDto>> getUserDocumentPaginated(
             @PathVariable("userId") Long userId,
@@ -72,6 +82,7 @@ public class DocumentController {
         return ResponseEntity.ok(documents);
     }
 
+    @Operation(summary = "Search document with keyword", description = "Returns a searched document with keyword")
     @GetMapping("/search")
     public ResponseEntity<List<DocumentResponseDto>> searchDocuments(
             @RequestParam Long userId,
@@ -81,6 +92,7 @@ public class DocumentController {
         return ResponseEntity.ok(documents);
     }
 
+    @Operation(summary = "Update document", description = "Updates a user document")
     @PutMapping("/{id}")
     public ResponseEntity<SuccessResponseDto> updateDocument(
             @PathVariable Long id,
@@ -97,6 +109,7 @@ public class DocumentController {
         return ResponseEntity.ok(response);
     }
 
+    @Operation(summary = "Delete document", description = "delete a documet by document Id and user Id")
     @DeleteMapping("/{id}")
     public ResponseEntity<SuccessResponseDto> deleteDocument(
             @PathVariable Long id,
@@ -129,6 +142,7 @@ public class DocumentController {
         return ResponseEntity.ok(documents);
     }
 
+    @Operation(summary = "Upload document with file", description = "Upload a file (PDF, Word, txt) - text is automatically extracted using Apache Tika")
     @PostMapping("/upload")
     public ResponseEntity<SuccessResponseDto> uploadDocument(
             @RequestParam Long userId,
@@ -154,10 +168,6 @@ public class DocumentController {
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
-    /**
-     * Download document file
-     * GET /api/documents/{id}/download?userId=1
-     */
     @GetMapping("/{id}/download")
     public ResponseEntity<Resource> downloadDocument(
             @PathVariable Long id,
@@ -184,22 +194,39 @@ public class DocumentController {
                 .body(resource);
     }
 
+    @Operation(summary = "Analyze document with AI", description = "Send document content to Claude AI for summarization and analysis")
     @PostMapping("/{documentId}/analyze")
-    public ResponseEntity<DocumentDetailResponseDto> analyzeDocument(
+    public ResponseEntity<?> analyzeDocument(
             @PathVariable Long documentId,
             @RequestParam Long userId) throws IOException {
+
+        Bucket bucket = rateLimiterService.resolveBucket(userId);
+        if (!bucket.tryConsume(1)) {
+        Map<String, String> errorData = new HashMap<>();
+        errorData.put("message", "Rate limit exceeded. Try again after some time.");
+
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(errorData);
+        }
 
         DocumentDetailResponseDto response = documentService.analyzeDocument(documentId, userId);
         return ResponseEntity.ok(response);
     }
 
+    @Operation(summary = "Ask AI a question", description = "Ask any question about the document content - powered by Anthropic Claude")
     @GetMapping("/{documentId}/ask")
-    public ResponseEntity<SuccessResponseDto> askQuestion(
+    public ResponseEntity<?> askQuestion(
             @PathVariable Long documentId,
             @RequestParam Long userId,
             @RequestParam String question
     ) {
-        System.out.println(documentId + " "+ userId + " " + question);
+        Bucket bucket = rateLimiterService.resolveBucket(userId);
+        if (!bucket.tryConsume(1)) {
+            Map<String, String> errorData = new HashMap<>();
+            errorData.put("message", "Rate limit exceeded. Try again after some time.");
+
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(errorData);
+        }
+
         String answer = documentService.answerQuestion(documentId, userId, question);
 
         Map<String, Object> data = new HashMap<>();

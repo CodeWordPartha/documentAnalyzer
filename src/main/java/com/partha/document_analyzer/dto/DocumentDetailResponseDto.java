@@ -1,11 +1,13 @@
 package com.partha.document_analyzer.dto;
 
 import com.partha.document_analyzer.entities.Document;
+import com.partha.document_analyzer.enums.Sentiment;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -26,6 +28,9 @@ public class DocumentDetailResponseDto {
     private Long userId;
     private String username;
     private String aiSummary;
+    private String aiDocumentType;
+    private Sentiment aiSentiment;
+    private List<String> aiKeyTopics;
     private LocalDateTime aiAnalyzedAt;
 
     public DocumentDetailResponseDto(Document document) {
@@ -40,6 +45,9 @@ public class DocumentDetailResponseDto {
         this.createdAt = document.getCreatedAt();
         this.updatedAt = document.getUpdatedAt();
         this.aiSummary = document.getAiSummary();
+        this.aiDocumentType = document.getAiDocumentType();
+        this.aiSentiment = document.getAiSentiment();
+        this.aiKeyTopics = document.getAiKeyTopics();
         this.aiAnalyzedAt = document.getAiAnalyzedAt();
 
         if (document.getUser() != null) {

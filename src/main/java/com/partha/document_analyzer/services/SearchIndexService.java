@@ -1,16 +1,41 @@
 package com.partha.document_analyzer.services;
 
+import jakarta.annotation.PostConstruct;
+import org.springframework.core.io.Resource;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
 @Slf4j
 public class SearchIndexService {
+
+    @Value("classpath:stop-words/stop-words.txt")
+    private Resource stopWordsResource;
+
+    private Set<String> stopWords;
+
+    @PostConstruct
+    public void init() {
+        try {
+            stopWords = new HashSet<>(Arrays.asList(
+                    stopWordsResource.getContentAsString(StandardCharsets.UTF_8)
+                            .split("\\r?\\n")
+            ));
+            log.info("Loaded {} stop words", stopWords.size());
+        } catch (IOException e) {
+            log.error("Failed to load stop words", e);
+            stopWords = new HashSet<>();
+        }
+    }
+
 
     // HashMap for O(1) document lookup by ID. it is used to find document with document id
     private final Map<Long, DocumentIndex> documentCache = new HashMap<>();
@@ -150,8 +175,10 @@ public class SearchIndexService {
 
     private Set<String> extractKeywords(String text) {
         return Arrays.stream(text.toLowerCase().split("\\W+"))
-                .filter(word -> word.length() > 3)  // Only words > 3 chars
-                .collect(Collectors.toSet());  // HashSet for unique keywords
+                .filter(word -> word.length() > 3)
+                .filter(word -> !word.matches(".*\\d.*"))
+                .filter(word -> !stopWords.contains(word))
+                .collect(Collectors.toSet());
     }
 
     private void updatePopularKeywords() {

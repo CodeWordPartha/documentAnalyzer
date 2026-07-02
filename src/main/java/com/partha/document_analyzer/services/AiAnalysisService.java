@@ -1,11 +1,13 @@
 package com.partha.document_analyzer.services;
 
 
+import com.partha.document_analyzer.dto.ai.DocumentAnalysisResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptTemplate;
+import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
@@ -27,18 +29,24 @@ public class AiAnalysisService {
     @Value("classpath:prompts/answer-question.st")
     private Resource answerQuestionPromptResource;
 
-    public String summarizeDocument(String title, String content) {
+    public DocumentAnalysisResult summarizeDocument(String title, String content) {
 
         log.info("sending document {} to claude for summarization", title);
 
         try
         {
+            BeanOutputConverter<DocumentAnalysisResult> outputConverter = new BeanOutputConverter<>(DocumentAnalysisResult.class);
 
             String templateText = summarizePromptResource.getContentAsString(StandardCharsets.UTF_8);
             PromptTemplate promptTemplate = new PromptTemplate(templateText);
-            Prompt prompt = promptTemplate.create(Map.of("title", title, "content", content));
+            Prompt prompt = promptTemplate.create(Map.of(
+                    "title", title,
+                    "content", content,
+                    "format", outputConverter.getFormat()));
 
-            return chatClient.prompt(prompt).call().content();
+            String response = chatClient.prompt(prompt).call().content();
+
+            return outputConverter.convert(response);
         } catch (IOException e) {
             log.error("Failed to load summarize prompt template", e);
             throw new RuntimeException("Failed to load prompt template", e);

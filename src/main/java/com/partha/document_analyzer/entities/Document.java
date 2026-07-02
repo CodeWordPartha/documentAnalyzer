@@ -1,5 +1,6 @@
 package com.partha.document_analyzer.entities;
 
+import com.partha.document_analyzer.enums.Sentiment;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -7,6 +8,7 @@ import lombok.NoArgsConstructor;
 import org.w3c.dom.Text;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "document")
@@ -67,6 +69,19 @@ public class Document {
 
     @Column(name = "ai_analyzed_at")
     private LocalDateTime aiAnalyzedAt;
+
+    @Column(name = "ai_document_type", length = 100)
+    private String aiDocumentType;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ai_sentiment", length = 50)
+    private Sentiment aiSentiment;
+
+    @ElementCollection
+    @CollectionTable(name = "document_key_topics", joinColumns = @JoinColumn(name = "document_id"))
+    @Column(name = "topic")
+    private List<String> aiKeyTopics;
+
 
     @PreUpdate
     protected void onUpdate() {
