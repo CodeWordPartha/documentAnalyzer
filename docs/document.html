@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document - Document Analyzer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-light">
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-dark bg-primary">
+        <div class="container">
+            <a href="dashboard.html" class="text-white text-decoration-none">← Back to Dashboard</a>
+            <span class="navbar-brand">Document Analyzer</span>
+            <button onclick="logout()" class="btn btn-outline-light btn-sm">Logout</button>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+
+        <!-- Document Info -->
+        <div class="card shadow mb-4">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h4 id="docTitle">Loading...</h4>
+                        <p class="text-muted" id="docDescription"></p>
+                        <small class="text-muted" id="docMeta"></small>
+                    </div>
+                    <button onclick="analyzeDocument()" class="btn btn-primary" id="analyzeBtn">
+                        Analyze with AI
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Results -->
+        <div id="aiResults" class="d-none">
+            <div class="row mb-4">
+
+                <!-- Summary -->
+                <div class="col-md-8">
+                    <div class="card shadow h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">AI Summary</h5>
+                            <p id="aiSummary" class="text-muted"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Metadata -->
+                <div class="col-md-4">
+                    <div class="card shadow h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">Analysis Details</h5>
+
+                            <div class="mb-3">
+                                <small class="text-muted d-block mb-1">Document Type</small>
+                                <span class="badge bg-primary" id="docType"></span>
+                            </div>
+
+                            <div class="mb-3">
+                                <small class="text-muted d-block mb-1">Sentiment</small>
+                                <span class="badge" id="sentimentBadge"></span>
+                            </div>
+
+                            <div>
+                                <small class="text-muted d-block mb-1">Key Topics</small>
+                                <div id="keyTopics"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Ask Question -->
+        <div class="card shadow">
+            <div class="card-body">
+                <h5 class="card-title">Ask a Question</h5>
+                <p class="text-muted small">Ask anything about this document and get an AI-powered answer</p>
+
+                <div id="askError" class="alert alert-danger d-none"></div>
+
+                <div class="input-group mb-3">
+                    <input type="text" id="questionInput" class="form-control"
+                        placeholder="e.g. What is the main topic of this document?"
+                        onkeypress="if(event.key==='Enter') askQuestion()">
+                    <button onclick="askQuestion()" class="btn btn-primary" id="askBtn">Ask</button>
+                </div>
+
+                <div id="answerContainer" class="d-none">
+                    <div class="card bg-light">
+                        <div class="card-body">
+                            <h6 class="text-primary">Answer:</h6>
+                            <p id="answerText" class="mb-0"></p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="app.js"></script>
+    <script>
+        if (!getToken()) {
+            window.location.href = 'index.html';
+        }
+
+        const documentId = localStorage.getItem('currentDocId');
+
+        if (!documentId) {
+            window.location.href = 'dashboard.html';
+        }
+
+        loadDocumentDetail();
+    </script>
+</body>
+</html>
