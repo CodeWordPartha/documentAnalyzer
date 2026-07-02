@@ -1,4 +1,5 @@
-const BASE_URL = 'http://localhost:8081';
+// const BASE_URL = 'http://localhost:8081';
+const BASE_URL = 'https://document-analyzer-er3v.onrender.com';
 let searchMode = 'title'; // 'title' or 'content'
 
 // ==================== AUTH ====================
