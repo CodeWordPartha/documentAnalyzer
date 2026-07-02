@@ -24,10 +24,11 @@ public class SearchIndexController {
     public ResponseEntity<SuccessResponseDto> indexDocument(@RequestParam Long documentId,
                                                             @RequestParam String title,
                                                             @RequestParam String content,
+                                                            @RequestParam Long userId,
                                                             @RequestParam(required = false) Long timeStamp) {
         long indexTimeStamp = timeStamp != null ? timeStamp : System.currentTimeMillis();
 
-        searchIndexService.indexDocument(documentId, title, content, indexTimeStamp);
+        searchIndexService.indexDocument(documentId, title, content, indexTimeStamp, userId);
 
         Map<String, Object> data = new HashMap<>();
         data.put("documentId", documentId);
@@ -40,8 +41,8 @@ public class SearchIndexController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<SuccessResponseDto> search(@RequestParam List<String> keywords) {
-        Set<Long> documentIds = searchIndexService.searchByKeywords(keywords);
+    public ResponseEntity<SuccessResponseDto> search(@RequestParam List<String> keywords, @RequestParam Long userId) {
+        Set<Long> documentIds = searchIndexService.searchByKeywords(keywords, userId);
 
         Map<String, Object> data = new HashMap<>();
         data.put("documentIds", documentIds);
@@ -74,9 +75,9 @@ public class SearchIndexController {
 
     @GetMapping("/top-keywords")
     public ResponseEntity<SuccessResponseDto> getTopKeywords(
-            @RequestParam(defaultValue = "10") int limit) {
+            @RequestParam(defaultValue = "10") int limit, @RequestParam Long userId) {
 
-        List<String> topKeywords = searchIndexService.getTopKeywords(limit);
+        List<String> topKeywords = searchIndexService.getTopKeywords(limit, userId);
 
         Map<String, Object> data = new HashMap<>();
         data.put("topKeywords", topKeywords);

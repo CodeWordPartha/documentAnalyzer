@@ -54,7 +54,8 @@ public class DocumentService {
                 savedDocument.getId(),
                 savedDocument.getTitle(),
                 savedDocument.getContent() != null ? savedDocument.getContent() : "",
-                System.currentTimeMillis()
+                System.currentTimeMillis(),
+                userID
         );
 
         return new DocumentResponseDto(savedDocument);
@@ -197,7 +198,8 @@ public class DocumentService {
                 savedDocument.getId(),
                 savedDocument.getTitle(),
                 savedDocument.getContent() != null ? savedDocument.getContent() : "",
-                System.currentTimeMillis()
+                System.currentTimeMillis(),
+                userId
         );
 
         return new DocumentResponseDto(savedDocument);

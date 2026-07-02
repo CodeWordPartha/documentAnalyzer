@@ -550,8 +550,8 @@ async function searchByContentKeywords(keywordInput) {
     try {
         const queryParams = keywords.map(k => `keywords=${encodeURIComponent(k)}`).join('&');
 
-        const response = await fetch(
-            `${BASE_URL}/api/search-index/search?${queryParams}`,
+const response = await fetch(
+    `${BASE_URL}/api/search-index/search?${queryParams}&userId=${getUserId()}`,
             { headers: authHeaders() }
         );
 
@@ -617,7 +617,7 @@ function clearSearch() {
 async function loadTopKeywords() {
     try {
         const response = await fetch(
-            `${BASE_URL}/api/search-index/top-keywords?limit=15`,
+            `${BASE_URL}/api/search-index/top-keywords?limit=15&userId=${getUserId()}`,
             { headers: authHeaders() }
         );
 

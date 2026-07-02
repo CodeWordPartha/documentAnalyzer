@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -36,81 +37,58 @@ public class SearchIndexService {
         }
     }
 
-
-    // HashMap for O(1) document lookup by ID. it is used to find document with document id
     private final Map<Long, DocumentIndex> documentCache = new HashMap<>();
 
-    // TreeMap for sorted date-based queries (range queries)
     private final TreeMap<Long, Set<Long>> dateIndex = new TreeMap<>();
 
-    // Inverted index: keyword → set of document IDs. It is used to search the keyword is present in which (multiple) documents
-    // why set ? bcz we dont want to store duplicate document ids
-    private final Map<String, Set<Long>> keywordIndex = new HashMap<>();
+    private final Map<Long, Map<String, Set<Long>>> userKeywordIndex = new ConcurrentHashMap<>();
 
-    // TreeSet for maintaining top keywords (sorted by frequency)
-    private final TreeSet<KeywordFrequency> popularKeywords = new TreeSet<>(
-            Comparator.comparing(
-                            (KeywordFrequency kf) -> kf.getFrequency()
-                    )
-                    .reversed()
-                    .thenComparing(
-                            (KeywordFrequency kf) -> kf.getKeyword()
-                    )
-    );
+    private final Map<Long, Map<String, Integer>> userKeywordFrequencyMap = new ConcurrentHashMap<>();
 
-    // Track keyword frequencies. We must count how many times each keyword appears
-    // we need this to get top keywords
-    private final Map<String, Integer> keywordFrequencyMap = new HashMap<>();
+    public void indexDocument(Long docId, String title, String content, long timestamp, Long userId) {
 
-    public void indexDocument(Long docId, String title, String content, long timestamp) {
-        // Extract keywords from content
         Set<String> keywords = extractKeywords(title + " " + content);
 
-        // Store in cache (HashMap for O(1) lookup)
         documentCache.put(docId, new DocumentIndex(docId, title, keywords));
 
-        // Add to date index (TreeMap for sorted dates and range queries)
         dateIndex.computeIfAbsent(timestamp, k -> new HashSet<>()).add(docId);
 
-        // Build inverted index (HashSet ensures unique doc IDs per keyword)
-        for (String keyword : keywords) {
-            keywordIndex.computeIfAbsent(keyword, k -> new HashSet<>()).add(docId);
+        Map<String, Set<Long>> kwIndex = userKeywordIndex.computeIfAbsent(userId, k -> new HashMap<>());
 
-            // Update keyword frequency
-            keywordFrequencyMap.merge(keyword, 1, Integer::sum);
+        Map<String, Integer> freqMap = userKeywordFrequencyMap.computeIfAbsent(userId, k -> new HashMap<>());
+
+        for (String keyword : keywords) {
+            kwIndex.computeIfAbsent(keyword, k -> new HashSet<>()).add(docId);
+            freqMap.merge(keyword, 1, Integer::sum);
         }
 
-        // Update popular keywords (TreeSet maintains sorted order)
-        updatePopularKeywords();
-
-        log.info("Indexed document {} with {} keywords", docId, keywords.size());
+        log.info("Indexed document {} with {} keywords for user {}", docId, keywords.size(), userId);
     }
 
-    // Search by keywords (AND operation). Uses HashSet for efficient intersection
-    public Set<Long> searchByKeywords(List<String> keywords) {
+    public Set<Long> searchByKeywords(List<String> keywords, Long userId) {
+
+        Map<String, Set<Long>> kwIndex = userKeywordIndex.getOrDefault(userId, new HashMap<>());
+
         if (keywords.isEmpty()) {
             return Collections.emptySet();
         }
 
-        // Start with first keyword's document set
         Set<Long> results = new HashSet<>(
-                keywordIndex.getOrDefault(keywords.get(0).toLowerCase(), Collections.emptySet())
+                kwIndex.getOrDefault(keywords.get(0).toLowerCase(), Collections.emptySet())
         );
 
-        // Intersect with remaining keywords (documents must have ALL keywords)
         for (int i = 1; i < keywords.size(); i++) {
-            Set<Long> keywordDocs = keywordIndex.getOrDefault(
+            Set<Long> keywordDocs = kwIndex.getOrDefault(
                     keywords.get(i).toLowerCase(),
                     Collections.emptySet()
             );
-            results.retainAll(keywordDocs);  // Intersection
+            results.retainAll(keywordDocs);
         }
 
-        log.info("Search for {} returned {} documents", keywords, results.size());
+        log.info("Search for {} returned {} documents for user {}", keywords, results.size(), userId);
         return results;
-    }
 
-    // Get documents within date range. Uses TreeMap's subMap for efficient range queries
+    }
 
     public Set<Long> getDocumentsBetweenDates(long startTime, long endTime) {
         return dateIndex.subMap(startTime, true, endTime, true)
@@ -120,54 +98,59 @@ public class SearchIndexService {
                 .collect(Collectors.toSet());
     }
 
-    // Get top N popular keywords. TreeSet already maintains sorted order
+    public List<String> getTopKeywords(int n, Long userId) {
+        Map<String, Integer> freqMap = userKeywordFrequencyMap
+                .getOrDefault(userId, new HashMap<>());
 
-    public List<String> getTopKeywords(int n) {
-        return popularKeywords.stream()
+        return freqMap.entrySet().stream()
+                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
                 .limit(n)
-                .map(kf -> kf.getKeyword())
+                .map(Map.Entry::getKey)
                 .collect(Collectors.toList());
-    }
 
-    // Remove document from index
+    }
 
     public void removeDocument(Long docId) {
         DocumentIndex doc = documentCache.remove(docId);
 
         if (doc != null) {
-            // Remove from keyword index
-            for (String keyword : doc.getKeywords()) {
-                Set<Long> docs = keywordIndex.get(keyword);
-                if (docs != null) {
-                    docs.remove(docId);
-                    if (docs.isEmpty()) {
-                        keywordIndex.remove(keyword);
+            userKeywordIndex.forEach((userId, kwIndex) -> {
+                for (String keyword : doc.getKeywords()) {
+                    Set<Long> docs = kwIndex.get(keyword);
+                    if (docs != null) {
+                        docs.remove(docId);
+                        if (docs.isEmpty()) {
+                            kwIndex.remove(keyword);
+                        }
                     }
                 }
-            }
 
-            // Remove from date index
+                userKeywordFrequencyMap.getOrDefault(userId, new HashMap<>())
+                        .entrySet()
+                        .removeIf(entry -> doc.getKeywords().contains(entry.getKey())
+                                && !kwIndex.containsKey(entry.getKey()));
+            });
+
             dateIndex.values().forEach(docSet -> docSet.remove(docId));
 
             log.info("Removed document {} from index", docId);
         }
     }
 
-    // Get index statistics
     public Map<String, Object> getIndexStats() {
         Map<String, Object> stats = new HashMap<>();
         stats.put("totalDocuments", documentCache.size());
-        stats.put("totalKeywords", keywordIndex.size());
-        stats.put("dateRanges", dateIndex.size());
+        stats.put("totalUsers", userKeywordIndex.size());
+        stats.put("totalKeywords", userKeywordIndex.values().stream()
+                .mapToInt(Map::size).sum());
         return stats;
     }
 
-    public void clearIndex() {
+    public synchronized void clearIndex() {
         documentCache.clear();
         dateIndex.clear();
-        keywordIndex.clear();
-        popularKeywords.clear();
-        keywordFrequencyMap.clear();
+        userKeywordIndex.clear();
+        userKeywordFrequencyMap.clear();
         log.info("Search index cleared");
     }
 
@@ -181,14 +164,7 @@ public class SearchIndexService {
                 .collect(Collectors.toSet());
     }
 
-    private void updatePopularKeywords() {
-        popularKeywords.clear();
-        keywordFrequencyMap.forEach((keyword, frequency) ->
-                popularKeywords.add(new KeywordFrequency(keyword, frequency))
-        );
-    }
 
-    // Inner classes
 
     @Data
     @AllArgsConstructor
