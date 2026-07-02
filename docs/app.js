@@ -614,6 +614,7 @@ function clearSearch() {
     loadDocuments();
 }
 
+
 async function loadTopKeywords() {
     try {
         const response = await fetch(
@@ -647,4 +648,5 @@ function searchByKeywordClick(keyword) {
     setSearchMode('content');
     document.getElementById('searchInput').value = keyword;
     searchDocuments();
+
 }
