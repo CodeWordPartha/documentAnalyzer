@@ -1,6 +1,7 @@
 # Document Analyzer
 
-An AI-powered document management system built with Spring Boot and Spring AI, integrated with Anthropic Claude for intelligent document analysis, summarization, and Q&A.
+An intelligent document management system built with Spring Boot, featuring 
+AI-driven analysis, summarization, and Q&A capabilities.
 
 **Live Demo:** [https://codewordpartha.github.io/documentAnalyzer](https://codewordpartha.github.io/documentAnalyzer)
 
