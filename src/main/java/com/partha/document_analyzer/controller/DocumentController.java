@@ -1,6 +1,8 @@
 package com.partha.document_analyzer.controller;
 
 import com.partha.document_analyzer.dto.*;
+import com.partha.document_analyzer.enums.DocumentPriority;
+import com.partha.document_analyzer.services.DocumentProcessingService;
 import com.partha.document_analyzer.services.DocumentService;
 import com.partha.document_analyzer.services.FileStorageService;
 import com.partha.document_analyzer.services.RateLimiterService;
@@ -35,6 +37,7 @@ public class DocumentController {
     private final DocumentService documentService;
     private final FileStorageService fileStorageService;
     private final RateLimiterService rateLimiterService;
+    private final DocumentProcessingService documentProcessingService;
 
     @Operation(summary = "Create document", description = "Create a new document with text content")
     @PostMapping
@@ -198,7 +201,8 @@ public class DocumentController {
     @PostMapping("/{documentId}/analyze")
     public ResponseEntity<?> analyzeDocument(
             @PathVariable Long documentId,
-            @RequestParam Long userId) throws IOException {
+            @RequestParam Long userId,
+            @RequestParam(defaultValue = "NORMAL") DocumentPriority priority) throws IOException {
 
         Bucket bucket = rateLimiterService.resolveBucket(userId);
         if (!bucket.tryConsume(1)) {
@@ -208,8 +212,44 @@ public class DocumentController {
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(errorData);
         }
 
-        DocumentDetailResponseDto response = documentService.analyzeDocument(documentId, userId);
-        return ResponseEntity.ok(response);
+        documentProcessingService.queueTask(
+                documentId,
+                "Document " + documentId,
+                "ANALYZE",
+                priority,
+                userId
+        );
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("documentId", documentId);
+        data.put("status", "QUEUED");
+        data.put("priority", priority);
+        data.put("message", "Analysis queued. Check status using /status endpoint.");
+
+        return ResponseEntity.accepted()
+                .body(new SuccessResponseDto("Document queued for analysis", data));
+    }
+
+    @GetMapping("/{documentId}/analysis-status")
+    public ResponseEntity<SuccessResponseDto> getAnalysisStatus(
+            @PathVariable Long documentId,
+            @RequestParam Long userId) {
+
+        String status = documentProcessingService.getTaskStatus(documentId);
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("documentId", documentId);
+        data.put("status", status);
+
+        if ("COMPLETED".equals(status)) {
+            DocumentDetailResponseDto document = documentService.getDocumentById(documentId, userId);
+            data.put("aiSummary", document.getAiSummary());
+            data.put("aiSentiment", document.getAiSentiment());
+            data.put("aiKeyTopics", document.getAiKeyTopics());
+            data.put("aiDocumentType", document.getAiDocumentType());
+        }
+
+        return ResponseEntity.ok(new SuccessResponseDto("Status retrieved", data));
     }
 
     @Operation(summary = "Ask AI a question", description = "Ask any question about the document content - powered by Anthropic Claude")

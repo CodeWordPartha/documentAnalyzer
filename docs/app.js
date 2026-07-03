@@ -321,12 +321,14 @@ function showAiResults(doc) {
 
 async function analyzeDocument() {
     const analyzeBtn = document.getElementById('analyzeBtn');
-    analyzeBtn.innerText = 'Analyzing...';
+    const priority = document.getElementById('prioritySelect').value;
+
+    analyzeBtn.innerText = 'Queuing...';
     analyzeBtn.disabled = true;
 
     try {
         const response = await fetch(
-            `${BASE_URL}/api/document/${documentId}/analyze?userId=${getUserId()}`,
+            `${BASE_URL}/api/document/${documentId}/analyze?userId=${getUserId()}&priority=${priority}`,
             {
                 method: 'POST',
                 headers: authHeaders()
@@ -335,25 +337,95 @@ async function analyzeDocument() {
 
         const data = await response.json();
 
-        if (response.ok) {
-            showAiResults(data);
-            analyzeBtn.innerText = 'Re-analyze';
+        if (response.status === 202) {
+            // Task queued successfully - start polling
+            showStatusContainer('Analysis queued with ' + priority + ' priority...');
+            pollAnalysisStatus();
+
         } else if (response.status === 429) {
-            alert('Rate limit exceeded. Please wait a minute before analyzing again.');
+            alert('Rate limit exceeded. Please wait a minute.');
             analyzeBtn.innerText = 'Analyze with AI';
+            analyzeBtn.disabled = false;
         } else {
-            alert('Analysis failed. Please try again.');
+            alert('Failed to queue analysis.');
             analyzeBtn.innerText = 'Analyze with AI';
+            analyzeBtn.disabled = false;
         }
 
     } catch (error) {
         alert('Cannot connect to server');
         analyzeBtn.innerText = 'Analyze with AI';
-    } finally {
         analyzeBtn.disabled = false;
     }
 }
 
+function showStatusContainer(message) {
+    const container = document.getElementById('statusContainer');
+    const statusText = document.getElementById('statusText');
+    container.classList.remove('d-none');
+    statusText.innerText = message;
+}
+
+function hideStatusContainer() {
+    document.getElementById('statusContainer').classList.add('d-none');
+}
+
+async function pollAnalysisStatus() {
+    const maxAttempts = 24; // poll for max 2 minutes (24 * 5 seconds)
+    let attempts = 0;
+
+    const interval = setInterval(async () => {
+        attempts++;
+
+        try {
+            const response = await fetch(
+                `${BASE_URL}/api/document/${documentId}/analysis-status?userId=${getUserId()}`,
+                { headers: authHeaders() }
+            );
+
+            const data = await response.json();
+            const status = data.data.status;
+
+            if (status === 'COMPLETED') {
+                clearInterval(interval);
+                hideStatusContainer();
+
+                // Show AI results
+                showAiResults(data.data);
+
+                const analyzeBtn = document.getElementById('analyzeBtn');
+                analyzeBtn.innerText = 'Re-analyze';
+                analyzeBtn.disabled = false;
+
+            } else if (status === 'FAILED') {
+                clearInterval(interval);
+                hideStatusContainer();
+                alert('Analysis failed. Please try again.');
+
+                const analyzeBtn = document.getElementById('analyzeBtn');
+                analyzeBtn.innerText = 'Analyze with AI';
+                analyzeBtn.disabled = false;
+
+            } else if (status === 'PROCESSING') {
+                showStatusContainer('Analyzing document with Claude AI...');
+
+            } else if (attempts >= maxAttempts) {
+                clearInterval(interval);
+                hideStatusContainer();
+                alert('Analysis is taking too long. Please try again later.');
+
+                const analyzeBtn = document.getElementById('analyzeBtn');
+                analyzeBtn.innerText = 'Analyze with AI';
+                analyzeBtn.disabled = false;
+            }
+
+        } catch (error) {
+            clearInterval(interval);
+            console.error('Polling error', error);
+        }
+
+    }, 5000); // poll every 5 seconds
+}
 async function askQuestion() {
     const question = document.getElementById('questionInput').value.trim();
 

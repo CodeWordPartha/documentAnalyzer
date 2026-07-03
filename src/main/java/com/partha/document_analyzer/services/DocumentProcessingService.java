@@ -100,4 +100,15 @@ public class DocumentProcessingService {
     public synchronized void clearHistory() {
         processingHistory.clear();
     }
+
+    public synchronized void failTask(ProcessingTask task) {
+        taskStatus.put(task.getDocumentId(), "FAILED");
+        processingHistory.addFirst(task);
+
+        if (processingHistory.size() > MAX_HISTORY_SIZE) {
+            processingHistory.removeLast();
+        }
+
+        log.error("Task failed for document {}", task.getDocumentId());
+    }
 }

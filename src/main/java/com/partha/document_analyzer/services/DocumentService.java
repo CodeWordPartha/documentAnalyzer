@@ -1,5 +1,6 @@
 package com.partha.document_analyzer.services;
 
+import com.partha.document_analyzer.config.FileUploadConfig;
 import com.partha.document_analyzer.dto.CreateDocumentRequestDto;
 import com.partha.document_analyzer.dto.DocumentDetailResponseDto;
 import com.partha.document_analyzer.dto.DocumentResponseDto;
@@ -8,6 +9,7 @@ import com.partha.document_analyzer.dto.ai.DocumentAnalysisResult;
 import com.partha.document_analyzer.entities.Document;
 import com.partha.document_analyzer.entities.User;
 import com.partha.document_analyzer.exceptions.DocumentNotFoundException;
+import com.partha.document_analyzer.exceptions.InvalidFileException;
 import com.partha.document_analyzer.exceptions.UserNotFoundException;
 import com.partha.document_analyzer.repositories.DocumentRepository;
 import com.partha.document_analyzer.repositories.UserRepository;
@@ -34,6 +36,7 @@ public class DocumentService {
     private final AiAnalysisService aiAnalysisService;
     private final TikaExtractionService tikaExtractionService;
     private final SearchIndexService searchIndexService;
+    private final FileUploadConfig fileUploadConfig;
 
     public DocumentResponseDto createDocument(Long userID, CreateDocumentRequestDto request) {
 
@@ -166,6 +169,8 @@ public class DocumentService {
             CreateDocumentRequestDto request,
             MultipartFile file) {
 
+        validateFileUpload(userId, file);
+
         // Verify user exists
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
@@ -239,6 +244,7 @@ public class DocumentService {
         return document.getFileName();
     }
 
+    @Transactional
     public DocumentDetailResponseDto analyzeDocument(Long documentId, Long userId) {
 
         Document document = documentRepository.findByIdAndUserIdAndIsDeletedFalse(documentId, userId)
@@ -269,6 +275,28 @@ public class DocumentService {
         String contentToUse = document.getContent() != null ? document.getContent() : document.getDescription();
 
         return aiAnalysisService.answerQuestion(document.getTitle(), contentToUse, question);
+    }
+
+    private void validateFileUpload(Long userId, MultipartFile file) {
+
+        String fileType = file.getContentType();
+
+        if (fileType == null || !fileUploadConfig.getAllowedTypes().contains(fileType)) {
+            throw new InvalidFileException("File type is not allowed. Allowed type : PDF, DOC, DOCX, TXT");
+        }
+
+        if (file.isEmpty()) {
+            throw new InvalidFileException("File is empty. Please upload valid file");
+        }
+
+        long currentDocumentCount = documentRepository.countByUserIdAndIsDeletedFalse(userId);
+        if (currentDocumentCount >= fileUploadConfig.getMaxDocumentsPerUser()) {
+            throw new InvalidFileException(
+                    "Document limit reached. Maximum " +
+                            fileUploadConfig.getMaxDocumentsPerUser() +
+                            " documents allowed per user."
+            );
+        }
     }
 
 }

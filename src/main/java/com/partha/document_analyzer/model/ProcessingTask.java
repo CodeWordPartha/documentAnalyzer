@@ -34,14 +34,9 @@ public class ProcessingTask implements Comparable<ProcessingTask> {
     public int compareTo(ProcessingTask other) {
 
         int priorityCompare = Integer.compare(other.priority.getValue(), this.priority.getValue());
-        // Sorting is always decided from the point of view of this.
-        //You control order by deciding what you compare against this.
-        // (this, other) means ascending order
-        // (other, this) means descending order here we want descending bcz high priority has high no.
 
         if (priorityCompare == 0) {
             return this.submittedAt.compareTo(other.submittedAt);
-            // If priority is same, earlier submitted task should come first thats why 'this' is written first
         }
         return priorityCompare;
     }
