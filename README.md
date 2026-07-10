@@ -50,6 +50,7 @@ AI-driven analysis, summarization, and Q&A capabilities.
 - **Top Keywords** — View most frequent keywords across your documents (per user)
 - **Priority Queue Processing** — Document processing queue with priority-based ordering
 - **Rate Limiting** — Per-user API rate limiting using Bucket4j (5 AI requests/minute)
+- **Redis Caching** — AI analysis results cached for 24 hours, document list cached for 10 minutes with automatic invalidation
 - **Swagger UI** — Complete interactive API documentation
 
 ---
@@ -71,6 +72,7 @@ AI-driven analysis, summarization, and Q&A capabilities.
 | Bucket4j | Rate limiting |
 | SpringDoc OpenAPI | API documentation |
 | Lombok | Boilerplate reduction |
+| Redis | Caching layer (AI analysis results, document lists) |
 
 ### Frontend
 | Technology | Purpose |
