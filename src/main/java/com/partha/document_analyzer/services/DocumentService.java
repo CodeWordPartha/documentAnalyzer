@@ -14,6 +14,7 @@ import com.partha.document_analyzer.exceptions.UserNotFoundException;
 import com.partha.document_analyzer.repositories.DocumentRepository;
 import com.partha.document_analyzer.repositories.UserRepository;
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -22,12 +23,14 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
 @AllArgsConstructor
 @Service
+@Slf4j
 public class DocumentService {
 
     private final UserRepository userRepository;
@@ -37,10 +40,10 @@ public class DocumentService {
     private final TikaExtractionService tikaExtractionService;
     private final SearchIndexService searchIndexService;
     private final FileUploadConfig fileUploadConfig;
+    private final CacheService cacheService;
 
-    public DocumentResponseDto createDocument(Long userID, CreateDocumentRequestDto request) {
-
-        User user = userRepository.findById(userID).orElseThrow(() -> new UserNotFoundException(userID));
+    public DocumentResponseDto createDocument(Long userId, CreateDocumentRequestDto request) {
+        User user = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException(userId));
 
         Document document = new Document();
         document.setTitle(request.getTitle());
@@ -58,8 +61,10 @@ public class DocumentService {
                 savedDocument.getTitle(),
                 savedDocument.getContent() != null ? savedDocument.getContent() : "",
                 System.currentTimeMillis(),
-                userID
+                userId
         );
+
+        cacheService.invalidateDocumentList(userId);
 
         return new DocumentResponseDto(savedDocument);
     }
@@ -77,10 +82,27 @@ public class DocumentService {
             throw new UserNotFoundException(userId);
         }
 
-        List<Document> documentList = documentRepository.findByUserIdAndIsDeletedFalse(userId);
-        return documentList.stream().map(doc -> new DocumentResponseDto(doc)).toList();
-    }
+        List<DocumentResponseDto> cachedDocumentList = cacheService.getCachedDocumentList(userId);
+        if (cachedDocumentList != null) {
+            return cachedDocumentList;
+        }
 
+        try {
+            List<Document> rawDocs = documentRepository.findByUserIdAndIsDeletedFalse(userId);
+            log.info("Found {} documents in DB for user {}", rawDocs.size(), userId);
+
+            List<DocumentResponseDto> documents = rawDocs.stream()
+                    .map(DocumentResponseDto::new)
+                    .toList();
+
+            cacheService.cacheDocumentList(userId, documents);
+            return documents;
+
+        } catch (Exception e) {
+            log.error("Error fetching documents for user {}: {}", userId, e.getMessage(), e);
+            return new ArrayList<>();
+        }
+    }
     public Page<DocumentResponseDto> getUserDocumentPaginated(Long userId, Pageable pageable) {
 
         if(!userRepository.existsById(userId)) {
@@ -207,6 +229,8 @@ public class DocumentService {
                 userId
         );
 
+        cacheService.invalidateDocumentList(userId);
+
         return new DocumentResponseDto(savedDocument);
     }
 
@@ -223,6 +247,8 @@ public class DocumentService {
 
         // Soft delete document
         document.setIsDeleted(true);
+        cacheService.invalidateDocumentList(userId);
+        cacheService.invalidateAiAnalysis(documentId);
         documentRepository.save(document);
     }
 
@@ -246,7 +272,11 @@ public class DocumentService {
 
     @Transactional
     public DocumentDetailResponseDto analyzeDocument(Long documentId, Long userId) {
+        DocumentDetailResponseDto cacheAiAnalysis = cacheService.getCacheAiAnalysis(documentId);
 
+        if (cacheAiAnalysis != null) {
+            return cacheAiAnalysis;
+        }
         Document document = documentRepository.findByIdAndUserIdAndIsDeletedFalse(documentId, userId)
                 .orElseThrow(() -> new DocumentNotFoundException(documentId));
 
@@ -263,9 +293,12 @@ public class DocumentService {
         document.setAiKeyTopics(result.keyTopics());
         document.setAiAnalyzedAt(LocalDateTime.now());
 
-        documentRepository.save(document);
+        Document savedDocument = documentRepository.save(document);
+        DocumentDetailResponseDto response = new DocumentDetailResponseDto(savedDocument);
 
-        return new DocumentDetailResponseDto(document);
+        cacheService.cacheAiAnalysis(documentId, response);
+
+        return response;
     }
 
     public String answerQuestion(Long documentId, Long userId, String question) {

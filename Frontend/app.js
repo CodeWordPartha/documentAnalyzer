@@ -319,29 +319,33 @@ function showAiResults(doc) {
     }
 }
 
-async function analyzeDocument() {
+async function analyzeDocument(forceRefresh = false) {
     const analyzeBtn = document.getElementById('analyzeBtn');
     const priority = document.getElementById('prioritySelect').value;
 
     analyzeBtn.innerText = 'Queuing...';
     analyzeBtn.disabled = true;
 
-    try {
+     try {
         const response = await fetch(
-            `${BASE_URL}/api/document/${documentId}/analyze?userId=${getUserId()}&priority=${priority}`,
+            `${BASE_URL}/api/document/${documentId}/analyze?userId=${getUserId()}&priority=${priority}&forceRefresh=${forceRefresh}`,
             {
                 method: 'POST',
                 headers: authHeaders()
             }
         );
-
         const data = await response.json();
 
-        if (response.status === 202) {
-            // Task queued successfully - start polling
+        if (response.status === 200) {
+            // Cache hit - result returned immediately
+            showAiResults(data);
+            analyzeBtn.innerText = 'Analyze with AI';
+            analyzeBtn.disabled = false;
+
+        } else if (response.status === 202) {
+            // Task queued - start polling
             showStatusContainer('Analysis queued with ' + priority + ' priority...');
             pollAnalysisStatus();
-
         } else if (response.status === 429) {
             alert('Rate limit exceeded. Please wait a minute.');
             analyzeBtn.innerText = 'Analyze with AI';

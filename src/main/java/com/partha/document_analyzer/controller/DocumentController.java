@@ -2,15 +2,13 @@ package com.partha.document_analyzer.controller;
 
 import com.partha.document_analyzer.dto.*;
 import com.partha.document_analyzer.enums.DocumentPriority;
-import com.partha.document_analyzer.services.DocumentProcessingService;
-import com.partha.document_analyzer.services.DocumentService;
-import com.partha.document_analyzer.services.FileStorageService;
-import com.partha.document_analyzer.services.RateLimiterService;
+import com.partha.document_analyzer.services.*;
 import io.github.bucket4j.Bucket;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -28,6 +26,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/document")
 @RequiredArgsConstructor
@@ -38,6 +37,7 @@ public class DocumentController {
     private final FileStorageService fileStorageService;
     private final RateLimiterService rateLimiterService;
     private final DocumentProcessingService documentProcessingService;
+    private final CacheService cacheService;
 
     @Operation(summary = "Create document", description = "Create a new document with text content")
     @PostMapping
@@ -202,7 +202,8 @@ public class DocumentController {
     public ResponseEntity<?> analyzeDocument(
             @PathVariable Long documentId,
             @RequestParam Long userId,
-            @RequestParam(defaultValue = "NORMAL") DocumentPriority priority) throws IOException {
+            @RequestParam(defaultValue = "NORMAL") DocumentPriority priority,
+            @RequestParam(defaultValue = "false") boolean forceRefresh) throws IOException {
 
         Bucket bucket = rateLimiterService.resolveBucket(userId);
         if (!bucket.tryConsume(1)) {
@@ -210,6 +211,18 @@ public class DocumentController {
         errorData.put("message", "Rate limit exceeded. Try again after some time.");
 
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(errorData);
+        }
+
+        if (!forceRefresh) {
+            DocumentDetailResponseDto cached = cacheService.getCacheAiAnalysis(documentId);
+            if (cached != null) {
+                log.info("Returning cached AI analysis for document {}", documentId);
+                return ResponseEntity.ok(cached);
+            }
+        } else {
+            // Force refresh - invalidate existing cache
+            cacheService.invalidateAiAnalysis(documentId);
+            log.info("Force refresh requested - invalidated cache for document {}", documentId);
         }
 
         documentProcessingService.queueTask(
