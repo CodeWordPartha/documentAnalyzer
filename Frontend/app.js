@@ -17,6 +17,10 @@ async function login() {
     loginBtn.innerText = 'Logging in...';
     loginBtn.disabled = true;
 
+    const patienceTimer = setTimeout(() => {
+        loginBtn.innerText = 'Still connecting... please wait ⏳';
+    }, 5000);
+
     try {
         const response = await fetch(`${BASE_URL}/api/auth/login`, {
             method: 'POST',
